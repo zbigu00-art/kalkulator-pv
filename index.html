@@ -14,7 +14,7 @@
 // Ładowanie bazy cenowej z prices.js (plik prywatny, nie w repozytorium)
 (function() {
   var s = document.createElement('script');
-  s.src = 'https://drive.google.com/uc?export=download&id=1o5r2wghE7_Cc0iz-kzNmh3lMQOagEsbj';
+  s.src = 'prices.js';
   s.onerror = function() {
     window.PRODUCTS = { modules: [], inverters: [], batteries: [] };
     var banner = document.getElementById('prices-banner');
