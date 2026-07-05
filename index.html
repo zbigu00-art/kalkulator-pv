@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#1B5E20">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Kalkulator PV</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// Ładowanie bazy cenowej z prices.js (plik prywatny, nie w repozytorium)
+(function() {
+  var s = document.createElement('script');
+  s.src = 'prices.js';
+  s.onerror = function() {
+    window.PRODUCTS = { modules: [], inverters: [], batteries: [] };
+    var banner = document.getElementById('prices-banner');
+    if (banner) banner.style.display = 'flex';
+    console.warn('prices.js nie znaleziony — baza cenowa pusta.');
+  };
+  document.head.appendChild(s);
+})();
+</script>
+<style>
+:root {
+  --green: #1B5E20;
+  --green-mid: #2E7D32;
+  --green-light: #E8F5E9;
+  --green-soft: #C8E6C9;
+  --amber: #F9A825;
+  --amber-dark: #E65100;
+  --blue: #1565A0;
+  --blue-light: #E3F2FD;
+  --red: #C62828;
+  --teal: #00897B;
+  --dark: #212121;
+  --mid: #555;
+  --muted: #9E9E9E;
+  --bg: #F5F7F5;
+  --card: #FFFFFF;
+  --border: #E0E0E0;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow: 0 2px 12px rgba(0,0,0,.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,.14);
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: var(--font); background: var(--bg); color: var(--dark); min-height: 100vh; }
+
+/* ── Top bar ── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--green);
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px; height: 56px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.topbar-icon { font-size: 22px; }
+.topbar h1 { font-size: 17px; font-weight: 700; color: #fff; flex: 1; }
+.topbar-badge {
+  background: var(--amber); color: #fff;
+  font-size: 11px; font-weight: 700;
+  padding: 3px 8px; border-radius: 12px; letter-spacing: .3px;
+}
+
+/* ── Nav tabs ── */
+.nav {
+  display: flex; background: var(--green-mid);
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; gap: 2px; padding: 0 4px 0;
+}
+.nav::-webkit-scrollbar { display: none; }
+.nav-tab {
+  flex: 0 0 auto; padding: 10px 14px;
+  font-size: 12px; font-weight: 600; color: rgba(255,255,255,.7);
+  border: none; background: none; cursor: pointer;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap; transition: all .15s;
+}
+.nav-tab.active { color: #fff; border-bottom-color: var(--amber); }
+
+/* ── Screens ── */
+.screen { display: none; padding: 16px; padding-bottom: 100px; }
+.screen.active { display: block; }
+
+/* ── Section card ── */
+.section-card {
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow); margin-bottom: 16px; overflow: hidden;
+}
+.section-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; font-size: 14px; font-weight: 700;
+  color: #fff; user-select: none; cursor: pointer;
+}
+.section-header .icon { font-size: 18px; }
+.section-header .chevron { margin-left: auto; font-size: 14px; transition: transform .2s; }
+.section-header.collapsed .chevron { transform: rotate(-90deg); }
+.section-body { padding: 12px 16px 16px; }
+.section-body.hidden { display: none; }
+
+/* ── Form rows ── */
+.form-row { margin-bottom: 12px; }
+.form-row label {
+  display: block; font-size: 11px; font-weight: 600;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+.form-row input, .form-row select, .form-row textarea {
+  width: 100%; padding: 10px 12px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 14px; font-family: var(--font); color: var(--dark);
+  background: #fafafa; transition: border-color .15s, background .15s;
+  -webkit-appearance: none; appearance: none;
+}
+.form-row input:focus, .form-row select:focus, .form-row textarea:focus {
+  outline: none; border-color: var(--green-mid); background: #fff;
+}
+.form-row textarea { resize: vertical; min-height: 72px; }
+.form-row .input-group { display: flex; gap: 8px; }
+.form-row .input-group input { flex: 1; }
+.form-row .input-group .unit {
+  display: flex; align-items: center; padding: 0 12px;
+  background: var(--green-light); border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); font-size: 13px; color: var(--green-mid); font-weight: 600;
+  white-space: nowrap;
+}
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.row3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
+
+/* ── Product item ── */
+.product-item {
+  background: var(--bg); border-radius: var(--radius-sm);
+  padding: 10px 12px; margin-bottom: 8px; border: 1.5px solid var(--border);
+  position: relative;
+}
+.product-item.filled { border-color: var(--green-soft); background: var(--green-light); }
+.product-name { font-size: 12px; font-weight: 600; color: var(--green); margin-bottom: 6px; }
+.product-value { font-size: 13px; font-weight: 700; color: var(--dark); }
+.product-price { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.product-remove {
+  position: absolute; top: 8px; right: 8px;
+  background: none; border: none; font-size: 18px; color: var(--muted);
+  cursor: pointer; padding: 2px 6px; line-height: 1;
+}
+
+/* ── Free line items ── */
+.line-item {
+  display: grid; grid-template-columns: 1fr auto auto;
+  gap: 6px; margin-bottom: 8px; align-items: center;
+}
+.line-item input { min-width: 0; }
+.line-item .qty-price { display: flex; gap: 6px; }
+.line-item .qty-price input { width: 72px; text-align: center; }
+.line-item .del-btn {
+  background: none; border: none; font-size: 20px; color: var(--muted);
+  cursor: pointer; padding: 4px; line-height: 1;
+}
+.add-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 14px; border-radius: var(--radius-sm);
+  border: 1.5px dashed var(--green-mid); background: none;
+  color: var(--green-mid); font-size: 13px; font-weight: 600;
+  cursor: pointer; width: 100%; justify-content: center;
+  transition: background .15s;
+}
+.add-btn:active { background: var(--green-light); }
+
+/* ── Summary strip ── */
+.sum-strip {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: var(--green-soft);
+  border-radius: var(--radius-sm); margin-top: 10px;
+  font-size: 12px; font-weight: 700; color: var(--green);
+}
+
+/* ── Totals card ── */
+.totals-card {
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); overflow: hidden; margin-bottom: 16px;
+}
+.totals-header {
+  background: var(--green); padding: 14px 18px;
+  font-size: 15px; font-weight: 700; color: #fff;
+}
+.totals-body { padding: 0; }
+.totals-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 18px; border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.totals-row:last-child { border-bottom: none; }
+.totals-row .label { color: var(--mid); }
+.totals-row .value { font-weight: 700; }
+.totals-row.grand {
+  background: var(--green); padding: 18px;
+}
+.totals-row.grand .label { color: #fff; font-size: 16px; font-weight: 700; }
+.totals-row.grand .value { color: var(--amber); font-size: 20px; font-weight: 800; }
+.margin-row input[type=range] {
+  width: 100%; accent-color: var(--green-mid); margin-top: 4px;
+}
+.margin-display { font-size: 22px; font-weight: 800; color: var(--green-mid); }
+
+/* ── Action buttons ── */
+.btn-primary {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 15px; border-radius: var(--radius);
+  background: var(--green); color: #fff;
+  font-size: 15px; font-weight: 700; border: none; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(27,94,32,.35); transition: transform .1s, box-shadow .1s;
+  margin-bottom: 12px;
+}
+.btn-primary:active { transform: scale(.98); box-shadow: 0 2px 8px rgba(27,94,32,.25); }
+.btn-primary.amber { background: var(--amber-dark); box-shadow: 0 4px 16px rgba(230,81,0,.3); }
+.btn-primary.blue { background: var(--blue); box-shadow: 0 4px 16px rgba(21,101,160,.3); }
+
+/* ── Search dropdown ── */
+.search-wrap { position: relative; }
+.search-results {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+  background: #fff; border: 1.5px solid var(--border); border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  max-height: 220px; overflow-y: auto; box-shadow: var(--shadow-lg);
+  display: none;
+}
+.search-results.open { display: block; }
+.search-result-item {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  cursor: pointer; font-size: 13px; transition: background .1s;
+}
+.search-result-item:hover, .search-result-item:active { background: var(--green-light); }
+.search-result-item .price { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: #323232; color: #fff; padding: 12px 20px; border-radius: 24px;
+  font-size: 14px; font-weight: 500; z-index: 999; opacity: 0;
+  transition: opacity .2s, transform .2s; pointer-events: none; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Oferta screen ── */
+.oferta-info {
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 16px; margin-bottom: 16px;
+}
+.oferta-info h3 { font-size: 13px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .5px; margin-bottom: 12px; }
+
+/* ── Bottom safe area ── */
+.safe-bottom { height: 32px; }
+
+/* ── Login screen ── */
+#login-screen {
+  position: fixed; inset: 0; z-index: 9999;
+  background: linear-gradient(160deg, #1B5E20 0%, #2E7D32 50%, #1565A0 100%);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 32px 24px;
+}
+#login-screen.hidden { display: none; }
+.login-logo {
+  font-size: 64px; margin-bottom: 8px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,.3));
+}
+.login-title {
+  font-size: 26px; font-weight: 800; color: #fff;
+  letter-spacing: -0.5px; margin-bottom: 4px;
+}
+.login-sub {
+  font-size: 13px; color: rgba(255,255,255,.65);
+  margin-bottom: 40px;
+}
+.login-card {
+  background: rgba(255,255,255,.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 20px;
+  padding: 28px 24px;
+  width: 100%; max-width: 340px;
+}
+.login-label {
+  font-size: 11px; font-weight: 700; color: rgba(255,255,255,.7);
+  text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px;
+  display: block;
+}
+.login-input-wrap { position: relative; margin-bottom: 20px; }
+.login-input {
+  width: 100%; padding: 14px 48px 14px 16px;
+  background: rgba(255,255,255,.15);
+  border: 1.5px solid rgba(255,255,255,.25);
+  border-radius: 12px;
+  font-size: 18px; letter-spacing: 3px;
+  color: #fff; font-family: var(--font);
+  -webkit-appearance: none; appearance: none;
+  transition: border-color .2s, background .2s;
+}
+.login-input::placeholder { color: rgba(255,255,255,.4); letter-spacing: 1px; font-size: 14px; }
+.login-input:focus { outline: none; border-color: #F9A825; background: rgba(255,255,255,.2); }
+.login-eye {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: rgba(255,255,255,.6);
+  font-size: 20px; cursor: pointer; padding: 4px;
+}
+.login-btn {
+  width: 100%; padding: 15px;
+  background: #F9A825; color: #1B5E20;
+  font-size: 15px; font-weight: 800;
+  border: none; border-radius: 12px; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(249,168,37,.4);
+  transition: transform .1s, box-shadow .1s;
+  letter-spacing: .3px;
+}
+.login-btn:active { transform: scale(.97); box-shadow: 0 2px 10px rgba(249,168,37,.3); }
+.login-error {
+  margin-top: 14px; padding: 10px 14px;
+  background: rgba(198,40,40,.3); border-radius: 8px;
+  color: #FFCDD2; font-size: 13px; font-weight: 600;
+  text-align: center; display: none;
+}
+.login-error.show { display: block; }
+.login-attempts {
+  margin-top: 12px; text-align: center;
+  font-size: 11px; color: rgba(255,255,255,.4);
+}
+.app-wrapper { display: none; }
+.app-wrapper.visible { display: block; }
+
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  z-index: 500; display: none; align-items: flex-end; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: #fff; border-radius: var(--radius) var(--radius) 0 0;
+  padding: 20px 16px 36px; width: 100%; max-width: 500px;
+  max-height: 85vh; overflow-y: auto;
+  animation: slideUp .25s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+.modal-close {
+  float: right; background: none; border: none; font-size: 24px;
+  color: var(--muted); cursor: pointer; margin-top: -4px;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════ EKRAN LOGOWANIA ══════════ -->
+<div id="login-screen">
+  <div class="login-logo">☀️</div>
+  <div class="login-title">Kalkulator PV</div>
+  <div class="login-sub">Narzędzie wyceny instalacji fotowoltaicznych</div>
+  <div class="login-card">
+    <label class="login-label" for="login-pwd">Hasło dostępu</label>
+    <div class="login-input-wrap">
+      <input type="password" id="login-pwd" class="login-input"
+        placeholder="Wpisz hasło..."
+        onkeydown="if(event.key==='Enter') doLogin()"
+        autocomplete="current-password">
+      <button class="login-eye" onclick="togglePwd()" id="eye-btn" title="Pokaż/ukryj">👁</button>
+    </div>
+    <button class="login-btn" onclick="doLogin()">🔓 Zaloguj</button>
+    <div class="login-error" id="login-error">❌ Nieprawidłowe hasło</div>
+    <div class="login-attempts" id="login-attempts"></div>
+  </div>
+</div>
+
+<!-- ══════════ APLIKACJA ══════════ -->
+<div class="app-wrapper" id="app-wrapper">
+
+<!-- Baner gdy prices.js nie załadowany -->
+<div id="prices-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:999;background:#E65100;color:#fff;padding:10px 16px;font-size:13px;font-weight:600;align-items:center;gap:10px;flex-wrap:wrap;">
+  <span>⚠️ Brak pliku <b>prices.js</b> — baza cenowa pusta. Dodaj plik prices.js do folderu aplikacji.</span>
+  <a href="#" style="color:#FFD600;text-decoration:underline" onclick="document.getElementById('prices-banner').style.display='none'">Zamknij</a>
+</div>
+
+<div class="topbar">
+  <span class="topbar-icon">☀️</span>
+  <h1>Kalkulator PV</h1>
+  <span class="topbar-badge" id="topbar-total">0 PLN</span>
+</div>
+
+<nav class="nav">
+  <button class="nav-tab active" onclick="showScreen('s-moduly')">Moduły</button>
+  <button class="nav-tab" onclick="showScreen('s-inwertery')">Inwertery</button>
+  <button class="nav-tab" onclick="showScreen('s-baterie')">Baterie</button>
+  <button class="nav-tab" onclick="showScreen('s-konstrukcja')">Konstr.</button>
+  <button class="nav-tab" onclick="showScreen('s-zabezp')">Zabezp.</button>
+  <button class="nav-tab" onclick="showScreen('s-projekt')">Projekt</button>
+  <button class="nav-tab" onclick="showScreen('s-dodatkowe')">Inne</button>
+  <button class="nav-tab" onclick="showScreen('s-podsumowanie')">💰 Suma</button>
+  <button class="nav-tab" onclick="showScreen('s-oferta')">📄 Oferta</button>
+</nav>
+
+<!-- ══════════ MODUŁY ══════════ -->
+<div class="screen active" id="s-moduly">
+  <div class="section-card">
+    <div class="section-header" style="background:#2E7D32" onclick="toggleSection(this)">
+      <span class="icon">🔲</span><span>Moduły fotowoltaiczne</span><span class="chevron">▾</span>
+    </div>
+    <div class="section-body" id="body-moduly">
+      <div class="form-row search-wrap">
+        <label>Szukaj modułu</label>
+        <input type="text" id="search-modul" placeholder="np. JA Solar 450W..." autocomplete="off" oninput="searchProduct(this,'modules','list-moduly')">
+        <div class="search-results" id="list-moduly"></div>
+      </div>
+      <div id="items-moduly"></div>
+      <div class="sum-strip"><span>Suma modułów</span><span id="sum-moduly">0,00 PLN</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ INWERTERY ══════════ -->
+<div class="screen" id="s-inwertery">
+  <div class="section-card">
+    <div class="section-header" style="background:#1565A0" onclick="toggleSection(this)">
+      <span class="icon">⚡</span><span>Inwertery / Mikroinwertery</span><span class="chevron">▾</span>
+    </div>
+    <div class="section-body" id="body-inwertery">
+      <div class="form-row search-wrap">
+        <label>Szukaj inwertera</label>
+        <input type="text" id="search-inwerter" placeholder="np. Deye 10K 3-fazowy..." autocomplete="off" oninput="searchProduct(this,'inverters','list-inwertery')">
+        <div class="search-results" id="list-inwertery"></div>
+      </div>
+      <div id="items-inwertery"></div>
+      <div class="sum-strip"><span>Suma inwerterów</span><span id="sum-inwertery">0,00 PLN</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ BATERIE ══════════ -->
+<div class="screen" id="s-baterie">
+  <div class="section-card">
+    <div class="section-header" style="background:#6A1B9A" onclick="toggleSection(this)">
+      <span class="icon">🔋</span><span>Magazyny energii / Baterie</span><span class="chevron">▾</span>
+    </div>
+    <div class="section-body" id="body-baterie">
+      <div class="form-row search-wrap">
+        <label>Szukaj baterii</label>
+        <input type="text" id="search-bateria" placeholder="np. Deye 6kWh..." autocomplete="off" oninput="searchProduct(this,'batteries','list-baterie')">
+        <div class="search-results" id="list-baterie"></div>
+      </div>
+      <div id="items-baterie"></div>
+      <div class="sum-strip"><span>Suma baterii</span><span id="sum-baterie">0,00 PLN</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ KONSTRUKCJA ══════════ -->
+<div class="screen" id="s-konstrukcja">
+  <div class="section-card">
+    <div class="section-header" style="background:#E65100" onclick="toggleSection(this)">
+      <span class="icon">🏗️</span><span>Konstrukcja montażowa</span><span class="chevron">▾</span>
+    </div>
+    <div class="section-body" id="body-konstrukcja">
+      <div id="items-konstrukcja"></div>
+      <button class="add-btn" onclick="addFreeItem('konstrukcja')">＋ Dodaj pozycję</button>
+      <div class="sum-strip"><span>Suma konstrukcji</span><span id="sum-konstrukcja">0,00 PLN</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ZABEZPIECZENIA ══════════ -->
+<div class="screen" id="s-zabezp">
+  <div class="section-card">
+    <div class="section-header" style="background:#C62828" onclick="toggleSection(this)">
+      <span class="icon">⚠️</span><span>Zabezpieczenia elektryczne</span><span class="chevron">▾</span>
+    </div>
+    <div class="section-body" id="body-zabezp">
+      <div id="items-zabezp"></div>
+      <button class="add-btn" onclick="addFreeItem('zabezp')">＋ Dodaj pozycję</button>
+      <div class="sum-strip"><span>Suma zabezpieczeń</span><span id="sum-zabezp">0,00 PLN</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PROJEKT ══════════ -->
+<div class="screen" id="s-projekt">
+  <div class="section-card">
+    <div class="section-header" style="background:#37474F" onclick="toggleSection(this)">
+      <span class="icon">📐</span><span>Projekt i dokumentacja</span><span class="chevron">▾</span>
+    </div>
+    <div class="section-body" id="body-projekt">
+      <div id="items-projekt"></div>
+      <button class="add-btn" onclick="addFreeItem('projekt')">＋ Dodaj pozycję</button>
+      <div class="sum-strip"><span>Suma projektu</span><span id="sum-projekt">0,00 PLN</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ DODATKOWE ══════════ -->
+<div class="screen" id="s-dodatkowe">
+  <div class="section-card">
+    <div class="section-header" style="background:#00897B" onclick="toggleSection(this)">
+      <span class="icon">➕</span><span>Dodatkowe pozycje / materiały</span><span class="chevron">▾</span>
+    </div>
+    <div class="section-body" id="body-dodatkowe">
+      <div id="items-dodatkowe"></div>
+      <button class="add-btn" onclick="addFreeItem('dodatkowe')">＋ Dodaj pozycję</button>
+      <div class="sum-strip"><span>Suma dodatkowych</span><span id="sum-dodatkowe">0,00 PLN</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PODSUMOWANIE ══════════ -->
+<div class="screen" id="s-podsumowanie">
+  <div class="totals-card">
+    <div class="totals-header">💰 Podsumowanie kosztów</div>
+    <div class="totals-body">
+      <div class="totals-row"><span class="label">Moduły</span><span class="value" id="t-moduly">0,00 PLN</span></div>
+      <div class="totals-row"><span class="label">Inwertery</span><span class="value" id="t-inwertery">0,00 PLN</span></div>
+      <div class="totals-row"><span class="label">Baterie</span><span class="value" id="t-baterie">0,00 PLN</span></div>
+      <div class="totals-row"><span class="label">Konstrukcja</span><span class="value" id="t-konstrukcja">0,00 PLN</span></div>
+      <div class="totals-row"><span class="label">Zabezpieczenia</span><span class="value" id="t-zabezp">0,00 PLN</span></div>
+      <div class="totals-row"><span class="label">Projekt</span><span class="value" id="t-projekt">0,00 PLN</span></div>
+      <div class="totals-row"><span class="label">Dodatkowe</span><span class="value" id="t-dodatkowe">0,00 PLN</span></div>
+      <div class="totals-row" style="background:#F5F5F5;font-weight:700"><span class="label" style="color:#333">Suma netto</span><span class="value" id="t-netto">0,00 PLN</span></div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-header" style="background:#F9A825;color:#fff" onclick="toggleSection(this)">
+      <span class="icon">📊</span><span>Marża i VAT</span><span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="form-row margin-row">
+        <label>Marża: <span class="margin-display" id="margin-display">10%</span></label>
+        <input type="range" min="0" max="60" value="10" id="margin-slider" oninput="updateMargin(this.value)">
+      </div>
+      <div class="row2">
+        <div class="form-row">
+          <label>VAT (%)</label>
+          <input type="number" id="vat-input" value="23" min="0" max="100" oninput="recalcAll()">
+        </div>
+        <div class="form-row">
+          <label>Marża (%)</label>
+          <input type="number" id="margin-input" value="10" min="0" max="100" oninput="syncMarginInput()">
+        </div>
+      </div>
+      <div class="totals-row"><span class="label">Marża (kwota)</span><span class="value" id="t-marza">0,00 PLN</span></div>
+      <div class="totals-row"><span class="label">Netto + marża</span><span class="value" id="t-netto-marza">0,00 PLN</span></div>
+      <div class="totals-row"><span class="label" id="t-vat-label">VAT (23%)</span><span class="value" id="t-vat">0,00 PLN</span></div>
+    </div>
+  </div>
+
+  <div class="totals-card">
+    <div class="totals-row grand">
+      <span class="label">💰 RAZEM BRUTTO</span>
+      <span class="value" id="t-brutto">0,00 PLN</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ OFERTA ══════════ -->
+<div class="screen" id="s-oferta">
+  <div class="oferta-info">
+    <h3>Dane wykonawcy</h3>
+    <div class="form-row"><label>Nazwa firmy</label><input type="text" id="o-firma" placeholder="np. Firma Elektryczna Sp. z o.o."></div>
+    <div class="form-row"><label>Adres</label><input type="text" id="o-adres" placeholder="ul. Przykładowa 1, 00-000 Miasto"></div>
+    <div class="row2">
+      <div class="form-row"><label>NIP</label><input type="text" id="o-nip" placeholder="000-000-00-00"></div>
+      <div class="form-row"><label>Tel / e-mail</label><input type="text" id="o-kontakt" placeholder="+48 xxx xxx xxx"></div>
+    </div>
+  </div>
+
+  <div class="oferta-info">
+    <h3>Dane klienta / inwestycji</h3>
+    <div class="form-row"><label>Imię i nazwisko / Nazwa</label><input type="text" id="o-klient" placeholder="Jan Kowalski"></div>
+    <div class="form-row"><label>Adres inwestycji</label><input type="text" id="o-adres-klient" placeholder="ul. Słoneczna 10, 93-000 Łódź"></div>
+    <div class="row2">
+      <div class="form-row"><label>Nr oferty</label><input type="text" id="o-nr" placeholder="1/07/2026"></div>
+      <div class="form-row"><label>Data</label><input type="date" id="o-data"></div>
+    </div>
+  </div>
+
+  <div class="oferta-info">
+    <h3>Warunki oferty</h3>
+    <div class="form-row"><label>Termin realizacji</label><input type="text" id="o-termin" placeholder="np. 4–6 tygodni od podpisania umowy"></div>
+    <div class="form-row"><label>Płatność</label><input type="text" id="o-platnosc" placeholder="np. 30% zaliczka, 70% po montażu"></div>
+    <div class="form-row"><label>Gwarancja</label><input type="text" id="o-gwarancja" placeholder="np. 5 lat na robociznę, 25 lat na moduły"></div>
+    <div class="form-row"><label>Ważność oferty</label><input type="text" id="o-waznosc" placeholder="np. 14 dni"></div>
+    <div class="form-row"><label>Uwagi dodatkowe</label><textarea id="o-uwagi" placeholder="Dodatkowe informacje..."></textarea></div>
+  </div>
+
+  <button class="btn-primary amber" onclick="generatePDF()">
+    <span style="font-size:20px">📄</span> Generuj ofertę PDF
+  </button>
+  <button class="btn-primary blue" onclick="saveDraft()">
+    <span style="font-size:18px">💾</span> Zapisz dane
+  </button>
+  <div class="safe-bottom"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+</div><!-- end app-wrapper -->
+
+<script>
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+const state = {
+  moduly:      [], // {model, qty, price}
+  inwertery:   [],
+  baterie:     [],
+  konstrukcja: [], // {name, qty, price}
+  zabezp:      [],
+  projekt:     [],
+  dodatkowe:   [],
+  margin: 10,
+  vat: 23
+};
+
+// ═══════════════════════════════════════════════════
+// NAV
+// ═══════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  recalcAll();
+}
+
+function toggleSection(header) {
+  const body = header.nextElementSibling;
+  header.classList.toggle('collapsed');
+  body.classList.toggle('hidden');
+}
+
+// ═══════════════════════════════════════════════════
+// PRODUCT SEARCH (moduły, inwertery, baterie)
+// ═══════════════════════════════════════════════════
+function searchProduct(input, dbKey, listId) {
+  const q = input.value.trim().toLowerCase();
+  const list = document.getElementById(listId);
+  if (q.length < 2) { list.classList.remove('open'); return; }
+  const results = PRODUCTS[dbKey].filter(p => p.m.toLowerCase().includes(q)).slice(0, 30);
+  list.innerHTML = results.map(p =>
+    `<div class="search-result-item" onclick="selectProduct('${dbKey}','${listId}',this)" data-model="${escHtml(p.m)}" data-price="${p.p}">
+      ${escHtml(p.m)}
+      <div class="price">${fmtPLN(p.p)}</div>
+    </div>`
+  ).join('') || '<div class="search-result-item" style="color:#9E9E9E">Brak wyników</div>';
+  list.classList.add('open');
+}
+
+function selectProduct(dbKey, listId, el) {
+  const model = el.dataset.model, price = parseFloat(el.dataset.price);
+  const sectionMap = { modules: 'moduly', inverters: 'inwertery', batteries: 'baterie' };
+  const section = sectionMap[dbKey];
+  state[section].push({ model, qty: 1, price });
+  renderProductItems(section);
+  document.getElementById('list-' + section).classList.remove('open');
+  document.getElementById('search-' + section.replace('moduly','modul').replace('inwertery','inwerter').replace('baterie','bateria')).value = '';
+  recalcAll();
+}
+
+function renderProductItems(section) {
+  const container = document.getElementById('items-' + section);
+  container.innerHTML = state[section].map((item, i) => `
+    <div class="product-item filled">
+      <div class="product-name">${escHtml(item.model)}</div>
+      <div class="row2" style="margin-top:8px">
+        <div class="form-row" style="margin:0">
+          <label>Ilość (szt.)</label>
+          <input type="number" min="1" value="${item.qty}" style="text-align:center"
+            oninput="updateProductQty('${section}',${i},this.value)">
+        </div>
+        <div class="form-row" style="margin:0">
+          <label>Cena jedn. (PLN)</label>
+          <input type="number" min="0" step="1" value="${item.price}"
+            oninput="updateProductPrice('${section}',${i},this.value)">
+        </div>
+      </div>
+      <div class="product-value" style="margin-top:8px">${fmtPLN(item.qty * item.price)}</div>
+      <button class="product-remove" onclick="removeProduct('${section}',${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function updateProductQty(section, i, val) { state[section][i].qty = parseFloat(val)||0; recalcAll(); }
+function updateProductPrice(section, i, val) { state[section][i].price = parseFloat(val)||0; recalcAll(); }
+function removeProduct(section, i) { state[section].splice(i,1); renderProductItems(section); recalcAll(); }
+
+// ═══════════════════════════════════════════════════
+// FREE LINE ITEMS (konstrukcja, zabezp, projekt, dodatkowe)
+// ═══════════════════════════════════════════════════
+const defaultItems = {
+  konstrukcja: ['Szyny montażowe aluminiowe','Klemy końcowe i środkowe','Haki / uchwyty dachowe','Łączniki szyn, śruby, uszczelki'],
+  zabezp: ['Rozłącznik DC','Wyłącznik nadprądowy AC (przedlicznikowy)','Ogranicznik przepięć DC (typ II)','Ogranicznik przepięć AC (typ II)','Wyłącznik różnicowoprądowy RCD'],
+  projekt: ['Projekt techniczny instalacji PV','Zgłoszenie przyłączenia do OSD','Dokumentacja powykonawcza / protokoły'],
+  dodatkowe: []
+};
+
+function initFreeItems() {
+  ['konstrukcja','zabezp','projekt','dodatkowe'].forEach(sec => {
+    if (state[sec].length === 0) {
+      (defaultItems[sec] || []).forEach(name => state[sec].push({ name, qty: 1, price: 0 }));
+    }
+    renderFreeItems(sec);
+  });
+}
+
+function addFreeItem(section) {
+  state[section].push({ name: '', qty: 1, price: 0 });
+  renderFreeItems(section);
+}
+
+function renderFreeItems(section) {
+  const container = document.getElementById('items-' + section);
+  container.innerHTML = state[section].map((item, i) => `
+    <div class="product-item ${item.price > 0 ? 'filled' : ''}">
+      <div class="form-row" style="margin-bottom:8px">
+        <label>Nazwa pozycji</label>
+        <input type="text" value="${escHtml(item.name)}" placeholder="← wpisz nazwę"
+          oninput="updateFreeItem('${section}',${i},'name',this.value)">
+      </div>
+      <div class="row2">
+        <div class="form-row" style="margin:0">
+          <label>Ilość (szt.)</label>
+          <input type="number" min="0" step="1" value="${item.qty}" style="text-align:center"
+            oninput="updateFreeItem('${section}',${i},'qty',this.value)">
+        </div>
+        <div class="form-row" style="margin:0">
+          <label>Cena jedn. (PLN)</label>
+          <input type="number" min="0" step="0.01" value="${item.price}"
+            oninput="updateFreeItem('${section}',${i},'price',this.value)">
+        </div>
+      </div>
+      ${item.qty && item.price ? `<div class="product-value" style="margin-top:6px">${fmtPLN(item.qty * item.price)}</div>` : ''}
+      <button class="product-remove" onclick="removeFreeItem('${section}',${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function updateFreeItem(section, i, field, val) {
+  if (field === 'qty' || field === 'price') val = parseFloat(val) || 0;
+  state[section][i][field] = val;
+  recalcAll();
+  // re-render to update filled class / value
+  renderFreeItems(section);
+}
+
+function removeFreeItem(section, i) { state[section].splice(i,1); renderFreeItems(section); recalcAll(); }
+
+// ═══════════════════════════════════════════════════
+// CALCULATIONS
+// ═══════════════════════════════════════════════════
+function sectionTotal(section) {
+  return state[section].reduce((s, item) => s + (item.qty||0)*(item.price||0), 0);
+}
+
+function recalcAll() {
+  const sections = ['moduly','inwertery','baterie','konstrukcja','zabezp','projekt','dodatkowe'];
+  const totals = {};
+  sections.forEach(sec => {
+    totals[sec] = sectionTotal(sec);
+    const el = document.getElementById('sum-' + sec);
+    if (el) el.textContent = fmtPLN(totals[sec]);
+    const tel = document.getElementById('t-' + sec);
+    if (tel) tel.textContent = fmtPLN(totals[sec]);
+  });
+
+  const netto = sections.reduce((s, sec) => s + totals[sec], 0);
+  const margin = (state.margin || 0) / 100;
+  const vat = (state.vat || 0) / 100;
+  const marzaKwota = netto * margin;
+  const nettoMarza = netto + marzaKwota;
+  const vatKwota = nettoMarza * vat;
+  const brutto = nettoMarza + vatKwota;
+
+  const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+  set('t-netto', fmtPLN(netto));
+  set('t-marza', fmtPLN(marzaKwota));
+  set('t-netto-marza', fmtPLN(nettoMarza));
+  set('t-vat', fmtPLN(vatKwota));
+  set('t-vat-label', `VAT (${state.vat}%)`);
+  set('t-brutto', fmtPLN(brutto));
+  set('topbar-total', fmtPLNShort(brutto));
+}
+
+function updateMargin(val) {
+  state.margin = parseInt(val);
+  document.getElementById('margin-display').textContent = val + '%';
+  document.getElementById('margin-input').value = val;
+  recalcAll();
+}
+
+function syncMarginInput() {
+  const val = Math.min(100, Math.max(0, parseInt(document.getElementById('margin-input').value)||0));
+  state.margin = val;
+  document.getElementById('margin-slider').value = val;
+  document.getElementById('margin-display').textContent = val + '%';
+  recalcAll();
+}
+
+// ═══════════════════════════════════════════════════
+// PDF GENERATION
+// ═══════════════════════════════════════════════════
+function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, MARGIN = 15, CW = W - 2 * MARGIN;
+  let y = 0;
+
+  function addPage() { doc.addPage(); y = 15; }
+  function checkY(need = 10) { if (y + need > 280) addPage(); }
+
+  // ── helper: fill rect ──
+  function rect(x, ry, w, h, color) {
+    doc.setFillColor(...hexToRGB(color));
+    doc.rect(x, ry, w, h, 'F');
+  }
+  function text(str, x, ty, opts = {}) {
+    doc.setFontSize(opts.size || 10);
+    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+    doc.setTextColor(...hexToRGB(opts.color || '#000000'));
+    doc.text(str, x, ty, { align: opts.align || 'left', maxWidth: opts.maxWidth });
+  }
+  function hrule(ry, color = '#E0E0E0') {
+    doc.setDrawColor(...hexToRGB(color));
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, ry, W - MARGIN, ry);
+  }
+
+  // ── BANNER ──
+  rect(0, 0, W, 32, '#1B5E20');
+  rect(0, 32, W, 3, '#F9A825');
+  text('OFERTA HANDLOWA', MARGIN, 13, { size: 20, bold: true, color: '#FFFFFF' });
+  text('Instalacja fotowoltaiczna', MARGIN, 21, { size: 11, color: '#A5D6A7' });
+
+  // date top right
+  const dateStr = document.getElementById('o-data').value || new Date().toLocaleDateString('pl-PL');
+  const nrOferty = document.getElementById('o-nr').value || '—';
+  text(`Nr: ${nrOferty}`, W - MARGIN, 14, { size: 9, color: '#ffffff', align: 'right', bold: true });
+  text(dateStr, W - MARGIN, 20, { size: 9, color: '#A5D6A7', align: 'right' });
+
+  y = 43;
+
+  // ── TWO-COLUMN: Wykonawca | Zamawiający ──
+  const colW = (CW - 6) / 2;
+  const col1 = MARGIN, col2 = MARGIN + colW + 6;
+
+  // Wykonawca box
+  rect(col1, y, colW, 38, '#1B5E20');
+  text('WYKONAWCA', col1 + 4, y + 6, { size: 8, bold: true, color: '#FFFFFF' });
+  const firma = document.getElementById('o-firma').value || '—';
+  const adres = document.getElementById('o-adres').value || '—';
+  const nip = document.getElementById('o-nip').value || '—';
+  const kontakt = document.getElementById('o-kontakt').value || '—';
+  text(firma, col1 + 4, y + 13, { size: 9, bold: true, color: '#FFFFFF', maxWidth: colW - 8 });
+  text(adres, col1 + 4, y + 19, { size: 8, color: '#C8E6C9', maxWidth: colW - 8 });
+  text(`NIP: ${nip}`, col1 + 4, y + 25, { size: 8, color: '#C8E6C9' });
+  text(kontakt, col1 + 4, y + 31, { size: 8, color: '#C8E6C9', maxWidth: colW - 8 });
+
+  // Zamawiający box
+  rect(col2, y, colW, 38, '#E8F5E9');
+  doc.setDrawColor(...hexToRGB('#2E7D32')); doc.setLineWidth(0.4);
+  doc.rect(col2, y, colW, 38);
+  text('ZAMAWIAJĄCY / INWESTYCJA', col2 + 4, y + 6, { size: 8, bold: true, color: '#1B5E20' });
+  const klient = document.getElementById('o-klient').value || '—';
+  const adresKlient = document.getElementById('o-adres-klient').value || '—';
+  text(klient, col2 + 4, y + 13, { size: 9, bold: true, color: '#1B5E20', maxWidth: colW - 8 });
+  text(adresKlient, col2 + 4, y + 20, { size: 8, color: '#555555', maxWidth: colW - 8 });
+
+  y += 44;
+
+  // ── ITEMS TABLE ──
+  checkY(20);
+  rect(MARGIN, y, CW, 8, '#2E7D32');
+  text('ZAKRES OFERTY', MARGIN + 3, y + 5.5, { size: 9, bold: true, color: '#FFFFFF' });
+  y += 8;
+
+  // Table header
+  const cols = [MARGIN, MARGIN + 80, MARGIN + 115, MARGIN + 155, MARGIN + CW];
+  const colWs = [80, 35, 40, 40];
+  rect(MARGIN, y, CW, 7, '#F5F5F5');
+  hrule(y, '#BDBDBD');
+  text('Nazwa pozycji', cols[0] + 2, y + 5, { size: 8, bold: true, color: '#555' });
+  text('Ilość', cols[1] + 2, y + 5, { size: 8, bold: true, color: '#555' });
+  text('Cena jedn. netto', cols[2] + 2, y + 5, { size: 8, bold: true, color: '#555' });
+  text('Wartość netto', cols[3] + 2, y + 5, { size: 8, bold: true, color: '#555' });
+  hrule(y + 7, '#BDBDBD');
+  y += 7;
+
+  // collect all items
+  const allItems = [];
+  const sectionLabels = {
+    moduly: '🔲 Moduły', inwertery: '⚡ Inwertery', baterie: '🔋 Baterie',
+    konstrukcja: '🏗 Konstrukcja', zabezp: '⚠ Zabezpieczenia', projekt: '📐 Projekt', dodatkowe: '+ Dodatkowe'
+  };
+  const sectionColors = {
+    moduly: '#2E7D32', inwertery: '#1565A0', baterie: '#6A1B9A',
+    konstrukcja: '#E65100', zabezp: '#C62828', projekt: '#37474F', dodatkowe: '#00897B'
+  };
+
+  Object.keys(sectionLabels).forEach(sec => {
+    const items = state[sec].filter(it => (it.qty||0) * (it.price||0) > 0);
+    if (!items.length) return;
+    allItems.push({ isHeader: true, label: sectionLabels[sec], color: sectionColors[sec] });
+    items.forEach(it => allItems.push({
+      name: it.model || it.name || '—',
+      qty: it.qty, price: it.price,
+      value: it.qty * it.price
+    }));
+  });
+
+  let rowIdx = 0;
+  allItems.forEach(item => {
+    checkY(8);
+    if (item.isHeader) {
+      rect(MARGIN, y, CW, 6, item.color + '22');
+      doc.setDrawColor(...hexToRGB(item.color)); doc.setLineWidth(2.5);
+      doc.line(MARGIN, y, MARGIN, y + 6);
+      doc.setLineWidth(0.3);
+      text(item.label, MARGIN + 4, y + 4.5, { size: 8, bold: true, color: item.color });
+      y += 6;
+      return;
+    }
+    // alternate row
+    if (rowIdx % 2 === 1) rect(MARGIN, y, CW, 7, '#F9FBF9');
+    // Name - wrap if needed
+    const nameLines = doc.splitTextToSize(item.name, 75);
+    const rowH = Math.max(7, nameLines.length * 4 + 3);
+    checkY(rowH);
+    if (rowIdx % 2 === 1) rect(MARGIN, y, CW, rowH, '#F9FBF9');
+    text(nameLines.join('\n'), cols[0] + 2, y + 5, { size: 8, color: '#222' });
+    text(item.qty + ' szt.', cols[1] + 2, y + 5, { size: 8, color: '#555' });
+    text(fmtPLN(item.price), cols[2] + 2, y + 5, { size: 8, color: '#555' });
+    text(fmtPLN(item.value), cols[3] + 2, y + 5, { size: 8, bold: true, color: '#1B5E20' });
+    hrule(y + rowH, '#EEEEEE');
+    y += rowH;
+    rowIdx++;
+  });
+
+  // ── TOTALS ──
+  checkY(50);
+  y += 6;
+
+  const margin = state.margin / 100;
+  const vat = state.vat / 100;
+  const sections = ['moduly','inwertery','baterie','konstrukcja','zabezp','projekt','dodatkowe'];
+  const netto = sections.reduce((s, sec) => s + sectionTotal(sec), 0);
+  const marzaKwota = netto * margin;
+  const nettoMarza = netto + marzaKwota;
+  const vatKwota = nettoMarza * vat;
+  const brutto = nettoMarza + vatKwota;
+
+  const tRows = [
+    { label: 'Suma netto', value: fmtPLN(netto), bold: false },
+    { label: `Marża (${state.margin}%)`, value: fmtPLN(marzaKwota), bold: false },
+    { label: 'Netto z marżą', value: fmtPLN(nettoMarza), bold: false },
+    { label: `VAT (${state.vat}%)`, value: fmtPLN(vatKwota), bold: false },
+  ];
+  tRows.forEach(row => {
+    rect(MARGIN + 85, y, CW - 85, 7, '#F5F5F5');
+    text(row.label, MARGIN + 87, y + 5, { size: 9, bold: row.bold, color: '#555' });
+    text(row.value, W - MARGIN - 2, y + 5, { size: 9, bold: row.bold, color: '#222', align: 'right' });
+    hrule(y + 7);
+    y += 7;
+  });
+
+  // Grand total
+  checkY(14);
+  rect(MARGIN, y, CW, 14, '#1B5E20');
+  text('RAZEM BRUTTO', MARGIN + 4, y + 9, { size: 13, bold: true, color: '#FFFFFF' });
+  text(fmtPLN(brutto), W - MARGIN - 3, y + 9, { size: 14, bold: true, color: '#F9A825', align: 'right' });
+  y += 14;
+
+  // ── WARUNKI ──
+  const termin = document.getElementById('o-termin').value;
+  const platnosc = document.getElementById('o-platnosc').value;
+  const gwarancja = document.getElementById('o-gwarancja').value;
+  const waznosc = document.getElementById('o-waznosc').value;
+  const uwagi = document.getElementById('o-uwagi').value;
+
+  if (termin || platnosc || gwarancja || waznosc || uwagi) {
+    checkY(30);
+    y += 8;
+    rect(MARGIN, y, CW, 7, '#1B5E20');
+    text('WARUNKI OFERTY', MARGIN + 3, y + 5, { size: 9, bold: true, color: '#FFFFFF' });
+    y += 9;
+    const warunki = [
+      termin && `Termin realizacji: ${termin}`,
+      platnosc && `Płatność: ${platnosc}`,
+      gwarancja && `Gwarancja: ${gwarancja}`,
+      waznosc && `Ważność oferty: ${waznosc}`,
+      uwagi && uwagi
+    ].filter(Boolean);
+    warunki.forEach(w => {
+      checkY(8);
+      const lines = doc.splitTextToSize(w, CW - 6);
+      text(lines.join('\n'), MARGIN + 3, y + 4, { size: 8.5, color: '#333' });
+      y += lines.length * 4.5 + 3;
+    });
+  }
+
+  // ── FOOTER ──
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    rect(0, 287, W, 10, '#1B5E20');
+    text(`Oferta ${nrOferty} — ${firma}`, MARGIN, 293, { size: 7, color: '#A5D6A7' });
+    text(`Strona ${p} / ${pageCount}`, W - MARGIN, 293, { size: 7, color: '#A5D6A7', align: 'right' });
+  }
+
+  // save
+  const safeNr = (nrOferty || 'oferta').replace(/[\/\\]/g,'-');
+  const safeKlient = (document.getElementById('o-klient').value || 'klient').split(' ')[0];
+  doc.save(`Oferta_PV_${safeKlient}_${safeNr}.pdf`);
+  showToast('✅ PDF wygenerowany!');
+}
+
+// ═══════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════
+function fmtPLN(n) {
+  return new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', minimumFractionDigits: 2 }).format(n || 0);
+}
+function fmtPLNShort(n) {
+  if (!n) return '0 PLN';
+  if (n >= 1000) return Math.round(n/1000*10)/10 + ' tys PLN';
+  return Math.round(n) + ' PLN';
+}
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function hexToRGB(hex) {
+  const h = hex.replace('#','');
+  const r = parseInt(h.substring(0,2),16);
+  const g = parseInt(h.substring(2,4),16);
+  const b = parseInt(h.substring(4,6),16);
+  return [r, g, b];
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ═══════════════════════════════════════════════════
+// PERSIST (localStorage)
+// ═══════════════════════════════════════════════════
+function saveDraft() {
+  const ofertaData = {
+    firma: document.getElementById('o-firma').value,
+    adres: document.getElementById('o-adres').value,
+    nip: document.getElementById('o-nip').value,
+    kontakt: document.getElementById('o-kontakt').value,
+    klient: document.getElementById('o-klient').value,
+    adresKlient: document.getElementById('o-adres-klient').value,
+    nr: document.getElementById('o-nr').value,
+    data: document.getElementById('o-data').value,
+    termin: document.getElementById('o-termin').value,
+    platnosc: document.getElementById('o-platnosc').value,
+    gwarancja: document.getElementById('o-gwarancja').value,
+    waznosc: document.getElementById('o-waznosc').value,
+    uwagi: document.getElementById('o-uwagi').value
+  };
+  localStorage.setItem('pv_state', JSON.stringify({ state, ofertaData }));
+  showToast('💾 Dane zapisane!');
+}
+
+function loadDraft() {
+  try {
+    const saved = localStorage.getItem('pv_state');
+    if (!saved) return;
+    const { state: savedState, ofertaData } = JSON.parse(saved);
+    Object.assign(state, savedState);
+    if (ofertaData) {
+      Object.keys(ofertaData).forEach(k => {
+        const el = document.getElementById('o-' + k.replace(/([A-Z])/g, '-$1').toLowerCase());
+        if (el) el.value = ofertaData[k];
+      });
+    }
+    ['moduly','inwertery','baterie'].forEach(sec => renderProductItems(sec));
+    ['konstrukcja','zabezp','projekt','dodatkowe'].forEach(sec => renderFreeItems(sec));
+    document.getElementById('margin-slider').value = state.margin;
+    document.getElementById('margin-input').value = state.margin;
+    document.getElementById('margin-display').textContent = state.margin + '%';
+    document.getElementById('vat-input').value = state.vat;
+    recalcAll();
+  } catch(e) { console.warn('Load failed', e); }
+}
+
+// ═══════════════════════════════════════════════════
+// LOGOWANIE — hasło hashowane SHA-256
+// Aby zmienić hasło: wejdź na https://emn178.github.io/online-tools/sha256.html
+// wpisz nowe hasło, skopiuj hash i wklej poniżej w miejsce PWD_HASH
+// ═══════════════════════════════════════════════════
+const PWD_HASH = 'bdc326290bdcd3180b5f59203fca65daa482c75b17df1dc8913bede15351acad';
+// Domyślne hasło: PV2026!  ← zmień po pierwszym uruchomieniu!
+
+const SESSION_KEY = 'pv_auth_session';
+const MAX_ATTEMPTS = 5;
+let loginAttempts = parseInt(sessionStorage.getItem('pv_attempts') || '0');
+
+async function sha256(msg) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function doLogin() {
+  if (loginAttempts >= MAX_ATTEMPTS) {
+    showLoginError('Zbyt wiele prób. Odśwież stronę.');
+    return;
+  }
+  const pwd = document.getElementById('login-pwd').value;
+  if (!pwd) return;
+  const hash = await sha256(pwd);
+  if (hash === PWD_HASH) {
+    sessionStorage.setItem(SESSION_KEY, '1');
+    sessionStorage.setItem('pv_attempts', '0');
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app-wrapper').classList.add('visible');
+  } else {
+    loginAttempts++;
+    sessionStorage.setItem('pv_attempts', loginAttempts);
+    showLoginError('Nieprawidłowe hasło');
+    const left = MAX_ATTEMPTS - loginAttempts;
+    document.getElementById('login-attempts').textContent =
+      left > 0 ? `Pozostało prób: ${left}` : 'Konto zablokowane — odśwież stronę';
+    document.getElementById('login-pwd').value = '';
+    document.getElementById('login-pwd').focus();
+  }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = '❌ ' + msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function togglePwd() {
+  const inp = document.getElementById('login-pwd');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  document.getElementById('eye-btn').textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+
+function checkSession() {
+  if (sessionStorage.getItem(SESSION_KEY) === '1') {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app-wrapper').classList.add('visible');
+    return true;
+  }
+  return false;
+}
+
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // sprawdź sesję — jeśli zalogowany, pokaż aplikację
+  checkSession();
+  // focus na pole hasła
+  if (!sessionStorage.getItem(SESSION_KEY)) {
+    setTimeout(() => document.getElementById('login-pwd').focus(), 100);
+  }
+  // set today as default date
+  document.getElementById('o-data').value = new Date().toISOString().split('T')[0];
+  // init free item sections with defaults
+  initFreeItems();
+  // load any saved draft
+  loadDraft();
+  // close search dropdowns on outside click
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-wrap')) {
+      document.querySelectorAll('.search-results').forEach(el => el.classList.remove('open'));
+    }
+  });
+  // register SW
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
+  }
+  recalcAll();
+});
+</script>
+</body>
+</html>
