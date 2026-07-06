@@ -1064,8 +1064,33 @@ function renderProductItems(section) {
   `).join('');
 }
 
-function updateProductQty(section, i, val) { state[section][i].qty = parseFloat(val)||0; recalcAll(); }
-function updateProductPrice(section, i, val) { state[section][i].price = parseFloat(val)||0; recalcAll(); }
+function updateProductQty(section, i, val) {
+  state[section][i].qty = parseFloat(val)||0;
+  recalcAll();
+  // update value display without full re-render
+  const container = document.getElementById('items-' + section);
+  if (container) {
+    const items = container.querySelectorAll('.product-item');
+    if (items[i]) {
+      const valDiv = items[i].querySelector('.product-value');
+      const v = state[section][i].qty * state[section][i].price;
+      if (valDiv) valDiv.textContent = fmtPLN(v);
+    }
+  }
+}
+function updateProductPrice(section, i, val) {
+  state[section][i].price = parseFloat(val)||0;
+  recalcAll();
+  const container = document.getElementById('items-' + section);
+  if (container) {
+    const items = container.querySelectorAll('.product-item');
+    if (items[i]) {
+      const valDiv = items[i].querySelector('.product-value');
+      const v = state[section][i].qty * state[section][i].price;
+      if (valDiv) valDiv.textContent = fmtPLN(v);
+    }
+  }
+}
 function removeProduct(section, i) { state[section].splice(i,1); renderProductItems(section); recalcAll(); }
 
 // ═══════════════════════════════════════════════════
@@ -1123,8 +1148,29 @@ function updateFreeItem(section, i, field, val) {
   if (field === 'qty' || field === 'price') val = parseFloat(val) || 0;
   state[section][i][field] = val;
   recalcAll();
-  // re-render to update filled class / value
-  renderFreeItems(section);
+  // Don't re-render here — it kills the keyboard focus on Android
+  // Just update the value display if it exists
+  const container = document.getElementById('items-' + section);
+  if (container) {
+    const items = container.querySelectorAll('.product-item');
+    if (items[i]) {
+      const valDiv = items[i].querySelector('.product-value');
+      const q = state[section][i].qty, p = state[section][i].price;
+      if (q && p) {
+        if (valDiv) valDiv.textContent = fmtPLN(q * p);
+        else {
+          const d = document.createElement('div');
+          d.className = 'product-value'; d.style.marginTop = '6px';
+          d.textContent = fmtPLN(q * p);
+          items[i].querySelector('.row2').insertAdjacentElement('afterend', d);
+        }
+        items[i].classList.add('filled');
+      } else if (valDiv) {
+        valDiv.remove();
+        items[i].classList.remove('filled');
+      }
+    }
+  }
 }
 
 function removeFreeItem(section, i) { state[section].splice(i,1); renderFreeItems(section); recalcAll(); }
@@ -1206,20 +1252,31 @@ function _generatePDFImpl() {
   function checkY(need = 10) { if (y + need > 280) addPage(); }
 
   // ── helper: fill rect ──
+  function safe(n) { return isNaN(n) || n === undefined || n === null ? 0 : Number(n); }
   function rect(x, ry, w, h, color) {
-    doc.setFillColor(...hexToRGB(color));
-    doc.rect(x, ry, w, h, 'F');
+    try {
+      doc.setFillColor(...hexToRGB(color));
+      doc.rect(safe(x), safe(ry), safe(w), safe(h), 'F');
+    } catch(e) { /* skip bad rect */ }
   }
   function text(str, x, ty, opts = {}) {
-    doc.setFontSize(opts.size || 10);
-    doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
-    doc.setTextColor(...hexToRGB(opts.color || '#000000'));
-    doc.text(str, x, ty, { align: opts.align || 'left', maxWidth: opts.maxWidth });
+    if (str === null || str === undefined) return;
+    try {
+      str = String(str).replace(/[\u0080-\uFFFF]/g, c => {
+        try { return c; } catch(e) { return '?'; }
+      });
+      doc.setFontSize(opts.size || 10);
+      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+      doc.setTextColor(...hexToRGB(opts.color || '#000000'));
+      doc.text(str, safe(x), safe(ty), { align: opts.align || 'left', maxWidth: opts.maxWidth });
+    } catch(e) { /* skip bad text */ }
   }
   function hrule(ry, color = '#E0E0E0') {
-    doc.setDrawColor(...hexToRGB(color));
-    doc.setLineWidth(0.3);
-    doc.line(MARGIN, ry, W - MARGIN, ry);
+    try {
+      doc.setDrawColor(...hexToRGB(color));
+      doc.setLineWidth(0.3);
+      doc.line(MARGIN, safe(ry), W - MARGIN, safe(ry));
+    } catch(e) { /* skip */ }
   }
 
   // ── BANNER ──
@@ -1420,7 +1477,13 @@ function _generatePDFImpl() {
 // HELPERS
 // ═══════════════════════════════════════════════════
 function fmtPLN(n) {
-  return new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', minimumFractionDigits: 2 }).format(n || 0);
+  if (!n && n !== 0) return '0,00 PLN';
+  n = Number(n) || 0;
+  try {
+    return new Intl.NumberFormat('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + ' PLN';
+  } catch(e) {
+    return n.toFixed(2).replace('.', ',') + ' PLN';
+  }
 }
 function fmtPLNShort(n) {
   if (!n) return '0 PLN';
@@ -1429,10 +1492,11 @@ function fmtPLNShort(n) {
 }
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function hexToRGB(hex) {
-  const h = hex.replace('#','');
-  const r = parseInt(h.substring(0,2),16);
-  const g = parseInt(h.substring(2,4),16);
-  const b = parseInt(h.substring(4,6),16);
+  if (!hex) return [0, 0, 0];
+  const h = String(hex).replace('#','').substring(0, 6); // take only first 6 chars
+  const r = parseInt(h.substring(0,2),16) || 0;
+  const g = parseInt(h.substring(2,4),16) || 0;
+  const b = parseInt(h.substring(4,6),16) || 0;
   return [r, g, b];
 }
 function showToast(msg) {
