@@ -783,10 +783,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--dark); min-
       <span class="icon">🔲</span><span>Moduły fotowoltaiczne</span><span class="chevron">▾</span>
     </div>
     <div class="section-body" id="body-moduly">
-      <div class="form-row search-wrap">
-        <label>Szukaj modułu</label>
-        <input type="text" id="search-modul" placeholder="np. JA Solar 450W..." autocomplete="off" oninput="searchProduct(this,'modules','list-moduly')">
-        <div class="search-results" id="list-moduly"></div>
+      <div class="form-row">
+        <label>Wybierz moduł z listy</label>
+        <select id="select-modul" onchange="addProductFromSelect('moduly','modules',this)" style="font-size:14px">
+          <option value="">-- wybierz model --</option>
+        </select>
       </div>
       <div id="items-moduly"></div>
       <div class="sum-strip"><span>Suma modułów</span><span id="sum-moduly">0,00 PLN</span></div>
@@ -801,10 +802,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--dark); min-
       <span class="icon">⚡</span><span>Inwertery / Mikroinwertery</span><span class="chevron">▾</span>
     </div>
     <div class="section-body" id="body-inwertery">
-      <div class="form-row search-wrap">
-        <label>Szukaj inwertera</label>
-        <input type="text" id="search-inwerter" placeholder="np. Deye 10K 3-fazowy..." autocomplete="off" oninput="searchProduct(this,'inverters','list-inwertery')">
-        <div class="search-results" id="list-inwertery"></div>
+      <div class="form-row">
+        <label>Wybierz inwerter z listy</label>
+        <select id="select-inwerter" onchange="addProductFromSelect('inwertery','inverters',this)" style="font-size:14px">
+          <option value="">-- wybierz model --</option>
+        </select>
       </div>
       <div id="items-inwertery"></div>
       <div class="sum-strip"><span>Suma inwerterów</span><span id="sum-inwertery">0,00 PLN</span></div>
@@ -819,10 +821,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--dark); min-
       <span class="icon">🔋</span><span>Magazyny energii / Baterie</span><span class="chevron">▾</span>
     </div>
     <div class="section-body" id="body-baterie">
-      <div class="form-row search-wrap">
-        <label>Szukaj baterii</label>
-        <input type="text" id="search-bateria" placeholder="np. Deye 6kWh..." autocomplete="off" oninput="searchProduct(this,'batteries','list-baterie')">
-        <div class="search-results" id="list-baterie"></div>
+      <div class="form-row">
+        <label>Wybierz baterię z listy</label>
+        <select id="select-bateria" onchange="addProductFromSelect('baterie','batteries',this)" style="font-size:14px">
+          <option value="">-- wybierz model --</option>
+        </select>
       </div>
       <div id="items-baterie"></div>
       <div class="sum-strip"><span>Suma baterii</span><span id="sum-baterie">0,00 PLN</span></div>
@@ -1016,29 +1019,35 @@ function toggleSection(header) {
 // ═══════════════════════════════════════════════════
 // PRODUCT SEARCH (moduły, inwertery, baterie)
 // ═══════════════════════════════════════════════════
-function searchProduct(input, dbKey, listId) {
-  const q = input.value.trim().toLowerCase();
-  const list = document.getElementById(listId);
-  if (q.length < 2) { list.classList.remove('open'); return; }
-  const results = PRODUCTS[dbKey].filter(p => p.m.toLowerCase().includes(q)).slice(0, 30);
-  list.innerHTML = results.map(p =>
-    `<div class="search-result-item" onclick="selectProduct('${dbKey}','${listId}',this)" data-model="${escHtml(p.m)}" data-price="${p.p}">
-      ${escHtml(p.m)}
-      <div class="price">${fmtPLN(p.p)}</div>
-    </div>`
-  ).join('') || '<div class="search-result-item" style="color:#9E9E9E">Brak wyników</div>';
-  list.classList.add('open');
+function populateSelects() {
+  const maps = [
+    ['select-modul',    'modules',   'moduly'],
+    ['select-inwerter', 'inverters', 'inwertery'],
+    ['select-bateria',  'batteries', 'baterie'],
+  ];
+  maps.forEach(([selId, dbKey, section]) => {
+    const sel = document.getElementById(selId);
+    if (!sel || !PRODUCTS || !PRODUCTS[dbKey]) return;
+    PRODUCTS[dbKey].forEach((p, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx;
+      opt.textContent = p.m + '  —  ' + fmtPLN(p.p);
+      opt.dataset.price = p.p;
+      opt.dataset.model = p.m;
+      sel.appendChild(opt);
+    });
+  });
 }
 
-function selectProduct(dbKey, listId, el) {
-  const model = el.dataset.model, price = parseFloat(el.dataset.price);
-  const sectionMap = { modules: 'moduly', inverters: 'inwertery', batteries: 'baterie' };
-  const section = sectionMap[dbKey];
+function addProductFromSelect(section, dbKey, sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  const model = opt.dataset.model;
+  const price = parseFloat(opt.dataset.price);
   state[section].push({ model, qty: 1, price });
   renderProductItems(section);
-  document.getElementById('list-' + section).classList.remove('open');
-  document.getElementById('search-' + section.replace('moduly','modul').replace('inwertery','inwerter').replace('baterie','bateria')).value = '';
   recalcAll();
+  sel.selectedIndex = 0; // reset to placeholder
 }
 
 function renderProductItems(section) {
@@ -1630,12 +1639,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initFreeItems();
   // load any saved draft
   loadDraft();
-  // close search dropdowns on outside click
-  document.addEventListener('click', e => {
-    if (!e.target.closest('.search-wrap')) {
-      document.querySelectorAll('.search-results').forEach(el => el.classList.remove('open'));
-    }
-  });
+  // populate product select dropdowns
+  setTimeout(populateSelects, 100);
   // register SW
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
