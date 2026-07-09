@@ -787,6 +787,35 @@ body { font-family: var(--font); background: var(--bg); color: var(--dark); min-
   font-size: 15px; font-weight: 600; color: var(--mid);
   cursor: pointer; flex-shrink: 0;
 }
+
+/* ── Styled native select ── */
+.sel-wrap {
+  position: relative;
+}
+.pv-select {
+  width: 100%;
+  padding: 11px 38px 11px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: var(--font);
+  color: var(--dark);
+  background: #fafafa;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath fill='%23888' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 20px;
+}
+.pv-select:focus {
+  outline: none;
+  border-color: var(--green-mid);
+  background-color: #fff;
+}
+.pv-select option { font-size: 14px; }
 </style>
 </head>
 <body>
@@ -847,11 +876,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--dark); min-
     <div class="section-body" id="body-moduly">
       <div class="form-row">
         <label>Wybierz moduł</label>
-        <button class="picker-btn" id="btn-modul" onclick="openPicker('moduly','modules','Moduły fotowoltaiczne','btn-modul')">
-          <span class="picker-label">-- kliknij aby wybrać --</span>
-          <span class="picker-price" id="price-modul"></span>
-          <span class="picker-arrow">▾</span>
-        </button>
+        <div class="sel-wrap">
+          <select id="sel-modul" class="pv-select" onchange="addFromSel('moduly','modules',this)">
+            <option value="">-- wybierz model --</option>
+          </select>
+        </div>
       </div>
       <div id="items-moduly"></div>
       <div class="sum-strip"><span>Suma modułów</span><span id="sum-moduly">0,00 PLN</span></div>
@@ -868,11 +897,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--dark); min-
     <div class="section-body" id="body-inwertery">
       <div class="form-row">
         <label>Wybierz inwerter</label>
-        <button class="picker-btn" id="btn-inwerter" onclick="openPicker('inwertery','inverters','Inwertery / Mikroinwertery','btn-inwerter')">
-          <span class="picker-label">-- kliknij aby wybrać --</span>
-          <span class="picker-price" id="price-inwerter"></span>
-          <span class="picker-arrow">▾</span>
-        </button>
+        <div class="sel-wrap">
+          <select id="sel-inwerter" class="pv-select" onchange="addFromSel('inwertery','inverters',this)">
+            <option value="">-- wybierz model --</option>
+          </select>
+        </div>
       </div>
       <div id="items-inwertery"></div>
       <div class="sum-strip"><span>Suma inwerterów</span><span id="sum-inwertery">0,00 PLN</span></div>
@@ -889,11 +918,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--dark); min-
     <div class="section-body" id="body-baterie">
       <div class="form-row">
         <label>Wybierz baterię / magazyn energii</label>
-        <button class="picker-btn" id="btn-bateria" onclick="openPicker('baterie','batteries','Magazyny energii / Baterie','btn-bateria')">
-          <span class="picker-label">-- kliknij aby wybrać --</span>
-          <span class="picker-price" id="price-bateria"></span>
-          <span class="picker-arrow">▾</span>
-        </button>
+        <div class="sel-wrap">
+          <select id="sel-bateria" class="pv-select" onchange="addFromSel('baterie','batteries',this)">
+            <option value="">-- wybierz model --</option>
+          </select>
+        </div>
       </div>
       <div id="items-baterie"></div>
       <div class="sum-strip"><span>Suma baterii</span><span id="sum-baterie">0,00 PLN</span></div>
@@ -1180,7 +1209,40 @@ function pickerSelect(idx) {
   document.getElementById('bsheet-search').blur();
 }
 
-function populateSelects() { /* no-op — replaced by picker */ }
+function populateSelects() {
+  const maps = [
+    ['sel-modul',    'modules'],
+    ['sel-inwerter', 'inverters'],
+    ['sel-bateria',  'batteries'],
+  ];
+  maps.forEach(([selId, dbKey]) => {
+    const sel = document.getElementById(selId);
+    if (!sel || !PRODUCTS || !PRODUCTS[dbKey]) return;
+    // clear existing options except first placeholder
+    while (sel.options.length > 1) sel.remove(1);
+    PRODUCTS[dbKey].forEach((p, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx;
+      // show model name + price in option text
+      const price = fmtPLN(p.p);
+      opt.textContent = p.m + '  [' + price + ']';
+      opt.dataset.model = p.m;
+      opt.dataset.price = p.p;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function addFromSel(section, dbKey, sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || opt.value === '') return;
+  const model = opt.dataset.model;
+  const price = parseFloat(opt.dataset.price) || 0;
+  state[section].push({ model, qty: 1, price });
+  renderProductItems(section);
+  recalcAll();
+  sel.selectedIndex = 0; // reset
+}
 
 function renderProductItems(section) {
   const container = document.getElementById('items-' + section);
@@ -1372,247 +1434,253 @@ function syncMarginInput() {
 // ═══════════════════════════════════════════════════
 function generatePDF() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
-    alert('Błąd: biblioteka PDF nie załadowana. Odśwież stronę i spróbuj ponownie.');
+    alert('Biblioteka PDF nie załadowana. Odśwież stronę i spróbuj ponownie.');
     return;
   }
   try {
-    _generatePDFImpl();
+    _doPDF();
   } catch(e) {
-    console.error('PDF generation error:', e);
-    alert('Błąd generowania PDF:\n' + e.message + '\n\nSprawdź konsolę przeglądarki (F12).');
+    console.error('PDF error:', e);
+    alert('Błąd generowania PDF:\n' + e.message);
   }
 }
 
-function _generatePDFImpl() {
+function _doPDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210, MARGIN = 15, CW = W - 2 * MARGIN;
+  const PW = 210, PH = 297, M = 14, CW = PW - 2*M;
   let y = 0;
 
-  function addPage() { doc.addPage(); y = 15; }
-  function checkY(need = 10) { if (y + need > 280) addPage(); }
-
-  // ── helper: fill rect ──
-  function safe(n) { return isNaN(n) || n === undefined || n === null ? 0 : Number(n); }
-  function rect(x, ry, w, h, color) {
-    try {
-      doc.setFillColor(...hexToRGB(color));
-      doc.rect(safe(x), safe(ry), safe(w), safe(h), 'F');
-    } catch(e) { /* skip bad rect */ }
+  // ── helpers ──────────────────────────────────────
+  function n(v)   { const x = Number(v); return isNaN(x) ? 0 : x; }
+  function s(v)   { return (v == null || v === undefined) ? '' : String(v).substring(0, 500); }
+  function hx(h)  {
+    const c = s(h).replace('#','').substring(0,6).padEnd(6,'0');
+    return [parseInt(c.slice(0,2),16)||0, parseInt(c.slice(2,4),16)||0, parseInt(c.slice(4,6),16)||0];
   }
-  function text(str, x, ty, opts = {}) {
-    if (str === null || str === undefined) return;
+  function newPage() { doc.addPage(); y = M; }
+  function chk(need) { if (y + n(need) > PH - 16) newPage(); }
+
+  function fill(x,ry,w,h,color) {
+    try { doc.setFillColor(...hx(color)); doc.rect(n(x),n(ry),n(w),n(h),'F'); } catch(e){}
+  }
+  function stroke(x,ry,w,h,color,lw) {
+    try { doc.setDrawColor(...hx(color)); doc.setLineWidth(n(lw)||0.3); doc.rect(n(x),n(ry),n(w),n(h)); } catch(e){}
+  }
+  function hline(ry,color,lw) {
+    try { doc.setDrawColor(...hx(color||'#E0E0E0')); doc.setLineWidth(n(lw)||0.3); doc.line(M,n(ry),PW-M,n(ry)); } catch(e){}
+  }
+  function vline(x,ry,len,color,lw) {
+    try { doc.setDrawColor(...hx(color||'#E0E0E0')); doc.setLineWidth(n(lw)||0.3); doc.line(n(x),n(ry),n(x),n(ry)+n(len)); } catch(e){}
+  }
+  function txt(str, x, ty, opts) {
+    opts = opts || {};
+    str = s(str);
+    if (!str) return;
     try {
-      str = String(str).replace(/[\u0080-\uFFFF]/g, c => {
-        try { return c; } catch(e) { return '?'; }
-      });
-      doc.setFontSize(opts.size || 10);
+      doc.setFontSize(n(opts.size)||10);
       doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
-      doc.setTextColor(...hexToRGB(opts.color || '#000000'));
-      doc.text(str, safe(x), safe(ty), { align: opts.align || 'left', maxWidth: opts.maxWidth });
-    } catch(e) { /* skip bad text */ }
+      doc.setTextColor(...hx(opts.color||'#000000'));
+      const tOpts = { align: opts.align||'left' };
+      if (opts.maxW) tOpts.maxWidth = n(opts.maxW);
+      doc.text(str, n(x), n(ty), tOpts);
+    } catch(e) { console.warn('txt err', e.message, str.substring(0,30)); }
   }
-  function hrule(ry, color = '#E0E0E0') {
+  function wrappedTxt(str, x, ty, maxW, lineH, opts) {
+    str = s(str);
+    if (!str) return ty;
+    opts = opts || {};
     try {
-      doc.setDrawColor(...hexToRGB(color));
-      doc.setLineWidth(0.3);
-      doc.line(MARGIN, safe(ry), W - MARGIN, safe(ry));
-    } catch(e) { /* skip */ }
+      const lines = doc.splitTextToSize(str, n(maxW));
+      lines.forEach((line, i) => txt(line, x, ty + i * n(lineH), opts));
+      return ty + lines.length * n(lineH);
+    } catch(e) { txt(str.substring(0,60), x, ty, opts); return ty + n(lineH); }
   }
 
-  // ── BANNER ──
-  rect(0, 0, W, 32, '#1B5E20');
-  rect(0, 32, W, 3, '#F9A825');
-  text('OFERTA HANDLOWA', MARGIN, 13, { size: 20, bold: true, color: '#FFFFFF' });
-  text('Instalacja fotowoltaiczna', MARGIN, 21, { size: 11, color: '#A5D6A7' });
+  // ── data ─────────────────────────────────────────
+  const firma       = s(document.getElementById('o-firma').value)    || '—';
+  const adres       = s(document.getElementById('o-adres').value)    || '—';
+  const nip         = s(document.getElementById('o-nip').value)      || '—';
+  const kontakt     = s(document.getElementById('o-kontakt').value)  || '—';
+  const klient      = s(document.getElementById('o-klient').value)   || '—';
+  const adresK      = s(document.getElementById('o-adres-klient').value) || '—';
+  const nrOferty    = s(document.getElementById('o-nr').value)       || '1/2026';
+  const dataOferty  = s(document.getElementById('o-data').value)     || '';
+  const termin      = s(document.getElementById('o-termin').value);
+  const platnosc    = s(document.getElementById('o-platnosc').value);
+  const gwarancja   = s(document.getElementById('o-gwarancja').value);
+  const waznosc     = s(document.getElementById('o-waznosc').value);
+  const uwagi       = s(document.getElementById('o-uwagi').value);
 
-  // date top right
-  const dateStr = document.getElementById('o-data').value || new Date().toLocaleDateString('pl-PL');
-  const nrOferty = document.getElementById('o-nr').value || '—';
-  text(`Nr: ${nrOferty}`, W - MARGIN, 14, { size: 9, color: '#ffffff', align: 'right', bold: true });
-  text(dateStr, W - MARGIN, 20, { size: 9, color: '#A5D6A7', align: 'right' });
+  // ── totals ────────────────────────────────────────
+  const secs = ['moduly','inwertery','baterie','konstrukcja','zabezp','projekt','dodatkowe'];
+  const netto = secs.reduce((acc, sec) => acc + sectionTotal(sec), 0);
+  const marza    = netto * (n(state.margin) / 100);
+  const nettoM   = netto + marza;
+  const vatKwota = nettoM * (n(state.vat) / 100);
+  const brutto   = nettoM + vatKwota;
 
-  y = 43;
+  // ══════════════════════════════════════════════════
+  // PAGE 1
+  // ══════════════════════════════════════════════════
+  y = 0;
 
-  // ── TWO-COLUMN: Wykonawca | Zamawiający ──
-  const colW = (CW - 6) / 2;
-  const col1 = MARGIN, col2 = MARGIN + colW + 6;
+  // banner
+  fill(0, 0, PW, 30, '#1B5E20');
+  fill(0, 30, PW, 3, '#F9A825');
+  txt('OFERTA HANDLOWA', M, 12, {size:18, bold:true, color:'#FFFFFF'});
+  txt('Instalacja fotowoltaiczna', M, 20, {size:10, color:'#A5D6A7'});
+  txt('Nr: ' + nrOferty, PW-M, 12, {size:9, color:'#FFFFFF', align:'right', bold:true});
+  txt(dataOferty, PW-M, 19, {size:9, color:'#A5D6A7', align:'right'});
+  y = 38;
 
-  // Wykonawca box
-  rect(col1, y, colW, 38, '#1B5E20');
-  text('WYKONAWCA', col1 + 4, y + 6, { size: 8, bold: true, color: '#FFFFFF' });
-  const firma = document.getElementById('o-firma').value || '—';
-  const adres = document.getElementById('o-adres').value || '—';
-  const nip = document.getElementById('o-nip').value || '—';
-  const kontakt = document.getElementById('o-kontakt').value || '—';
-  text(firma, col1 + 4, y + 13, { size: 9, bold: true, color: '#FFFFFF', maxWidth: colW - 8 });
-  text(adres, col1 + 4, y + 19, { size: 8, color: '#C8E6C9', maxWidth: colW - 8 });
-  text(`NIP: ${nip}`, col1 + 4, y + 25, { size: 8, color: '#C8E6C9' });
-  text(kontakt, col1 + 4, y + 31, { size: 8, color: '#C8E6C9', maxWidth: colW - 8 });
+  // two-column header boxes
+  const hw = (CW - 5) / 2;
+  const c1 = M, c2 = M + hw + 5;
+  const bh = 36;
 
-  // Zamawiający box
-  rect(col2, y, colW, 38, '#E8F5E9');
-  doc.setDrawColor(...hexToRGB('#2E7D32')); doc.setLineWidth(0.4);
-  doc.rect(col2, y, colW, 38);
-  text('ZAMAWIAJĄCY / INWESTYCJA', col2 + 4, y + 6, { size: 8, bold: true, color: '#1B5E20' });
-  const klient = document.getElementById('o-klient').value || '—';
-  const adresKlient = document.getElementById('o-adres-klient').value || '—';
-  text(klient, col2 + 4, y + 13, { size: 9, bold: true, color: '#1B5E20', maxWidth: colW - 8 });
-  text(adresKlient, col2 + 4, y + 20, { size: 8, color: '#555555', maxWidth: colW - 8 });
+  fill(c1, y, hw, bh, '#1B5E20');
+  txt('WYKONAWCA', c1+3, y+6, {size:7, bold:true, color:'#FFFFFF'});
+  wrappedTxt(firma,   c1+3, y+12, hw-6, 4.5, {size:9,  bold:true, color:'#FFFFFF'});
+  wrappedTxt(adres,   c1+3, y+19, hw-6, 4,   {size:8,  color:'#C8E6C9'});
+  txt('NIP: '+nip,   c1+3, y+28, {size:7.5, color:'#C8E6C9'});
+  txt(kontakt,        c1+3, y+33, {size:7.5, color:'#C8E6C9'});
 
-  y += 44;
+  fill(c2, y, hw, bh, '#E8F5E9');
+  stroke(c2, y, hw, bh, '#2E7D32', 0.4);
+  txt('ZAMAWIAJĄCY / INWESTYCJA', c2+3, y+6, {size:7, bold:true, color:'#1B5E20'});
+  wrappedTxt(klient,  c2+3, y+12, hw-6, 4.5, {size:9, bold:true, color:'#1B5E20'});
+  wrappedTxt(adresK,  c2+3, y+19, hw-6, 4,   {size:8, color:'#555555'});
+  y += bh + 8;
 
-  // ── ITEMS TABLE ──
-  checkY(20);
-  rect(MARGIN, y, CW, 8, '#2E7D32');
-  text('ZAKRES OFERTY', MARGIN + 3, y + 5.5, { size: 9, bold: true, color: '#FFFFFF' });
-  y += 8;
-
-  // Table header
-  const cols = [MARGIN, MARGIN + 80, MARGIN + 115, MARGIN + 155, MARGIN + CW];
-  const colWs = [80, 35, 40, 40];
-  rect(MARGIN, y, CW, 7, '#F5F5F5');
-  hrule(y, '#BDBDBD');
-  text('Nazwa pozycji', cols[0] + 2, y + 5, { size: 8, bold: true, color: '#555' });
-  text('Ilość', cols[1] + 2, y + 5, { size: 8, bold: true, color: '#555' });
-  text('Cena jedn. netto', cols[2] + 2, y + 5, { size: 8, bold: true, color: '#555' });
-  text('Wartość netto', cols[3] + 2, y + 5, { size: 8, bold: true, color: '#555' });
-  hrule(y + 7, '#BDBDBD');
+  // ── items table header ────────────────────────────
+  fill(M, y, CW, 7, '#2E7D32');
+  txt('ZAKRES OFERTY', M+3, y+5, {size:9, bold:true, color:'#FFFFFF'});
   y += 7;
 
-  // collect all items
-  const allItems = [];
-  const sectionLabels = {
-    moduly: '🔲 Moduły', inwertery: '⚡ Inwertery', baterie: '🔋 Baterie',
-    konstrukcja: '🏗 Konstrukcja', zabezp: '⚠ Zabezpieczenia', projekt: '📐 Projekt', dodatkowe: '+ Dodatkowe'
-  };
-  const sectionColors = {
-    moduly: '#2E7D32', inwertery: '#1565A0', baterie: '#6A1B9A',
-    konstrukcja: '#E65100', zabezp: '#C62828', projekt: '#37474F', dodatkowe: '#00897B'
-  };
+  const C = [M, M+82, M+117, M+158, M+CW]; // col x positions
+  fill(M, y, CW, 6.5, '#F5F5F5');
+  txt('Nazwa pozycji',      C[0]+2, y+4.5, {size:7.5, bold:true, color:'#555555'});
+  txt('Ilość',              C[1]+2, y+4.5, {size:7.5, bold:true, color:'#555555'});
+  txt('Cena jedn. netto',   C[2]+2, y+4.5, {size:7.5, bold:true, color:'#555555'});
+  txt('Wartość netto',      C[3]+2, y+4.5, {size:7.5, bold:true, color:'#555555'});
+  hline(y+6.5, '#BDBDBD', 0.4);
+  y += 6.5;
 
-  Object.keys(sectionLabels).forEach(sec => {
-    const items = state[sec].filter(it => (it.qty||0) * (it.price||0) > 0);
-    if (!items.length) return;
-    allItems.push({ isHeader: true, label: sectionLabels[sec], color: sectionColors[sec] });
-    items.forEach(it => allItems.push({
-      name: it.model || it.name || '—',
-      qty: it.qty, price: it.price,
-      value: it.qty * it.price
-    }));
-  });
+  // section colors
+  const secColors = {
+    moduly:'#2E7D32', inwertery:'#1565A0', baterie:'#6A1B9A',
+    konstrukcja:'#E65100', zabezp:'#C62828', projekt:'#37474F', dodatkowe:'#00897B'
+  };
+  const secLabels = {
+    moduly:'Moduły fotowoltaiczne', inwertery:'Inwertery / Mikroinwertery',
+    baterie:'Magazyny energii / Baterie', konstrukcja:'Konstrukcja montazowa',
+    zabezp:'Zabezpieczenia elektryczne', projekt:'Projekt i dokumentacja',
+    dodatkowe:'Dodatkowe pozycje'
+  };
 
   let rowIdx = 0;
-  allItems.forEach(item => {
-    checkY(8);
-    if (item.isHeader) {
-      rect(MARGIN, y, CW, 6, item.color + '22');
-      doc.setDrawColor(...hexToRGB(item.color)); doc.setLineWidth(2.5);
-      doc.line(MARGIN, y, MARGIN, y + 6);
-      doc.setLineWidth(0.3);
-      text(item.label, MARGIN + 4, y + 4.5, { size: 8, bold: true, color: item.color });
-      y += 6;
-      return;
-    }
-    // alternate row
-    if (rowIdx % 2 === 1) rect(MARGIN, y, CW, 7, '#F9FBF9');
-    // Name - wrap if needed
-    const nameLines = doc.splitTextToSize(item.name, 75);
-    const rowH = Math.max(7, nameLines.length * 4 + 3);
-    checkY(rowH);
-    if (rowIdx % 2 === 1) rect(MARGIN, y, CW, rowH, '#F9FBF9');
-    text(nameLines.join('\n'), cols[0] + 2, y + 5, { size: 8, color: '#222' });
-    text(item.qty + ' szt.', cols[1] + 2, y + 5, { size: 8, color: '#555' });
-    text(fmtPLN(item.price), cols[2] + 2, y + 5, { size: 8, color: '#555' });
-    text(fmtPLN(item.value), cols[3] + 2, y + 5, { size: 8, bold: true, color: '#1B5E20' });
-    hrule(y + rowH, '#EEEEEE');
-    y += rowH;
-    rowIdx++;
+  secs.forEach(sec => {
+    const items = state[sec].filter(it => n(it.qty) * n(it.price) > 0);
+    if (!items.length) return;
+
+    // section label row
+    chk(12);
+    const sc = secColors[sec] || '#333333';
+    fill(M, y, CW, 5.5, sc + '22');
+    vline(M, y, 5.5, sc, 2);
+    txt(secLabels[sec] || sec, M+4, y+4, {size:7.5, bold:true, color:sc});
+    y += 5.5;
+
+    items.forEach(item => {
+      const nm = s(item.model || item.name || '—');
+      // estimate row height
+      let rowH = 7;
+      try { const ls = doc.splitTextToSize(nm, 78); rowH = Math.max(7, ls.length * 4 + 3); } catch(e){}
+      chk(rowH + 2);
+      if (rowIdx % 2 === 1) fill(M, y, CW, rowH, '#F9FBF9');
+      wrappedTxt(nm,               C[0]+2, y+5, 78, 4, {size:7.5, color:'#222222'});
+      txt(n(item.qty)+' szt.',     C[1]+2, y+5,      {size:7.5, color:'#555555'});
+      txt(fmtPLN(n(item.price)),   C[2]+2, y+5,      {size:7.5, color:'#555555'});
+      txt(fmtPLN(n(item.qty)*n(item.price)), C[3]+2, y+5, {size:7.5, bold:true, color:'#1B5E20'});
+      hline(y+rowH, '#EEEEEE', 0.2);
+      y += rowH;
+      rowIdx++;
+    });
   });
 
-  // ── TOTALS ──
-  checkY(50);
-  y += 6;
-
-  const margin = state.margin / 100;
-  const vat = state.vat / 100;
-  const sections = ['moduly','inwertery','baterie','konstrukcja','zabezp','projekt','dodatkowe'];
-  const netto = sections.reduce((s, sec) => s + sectionTotal(sec), 0);
-  const marzaKwota = netto * margin;
-  const nettoMarza = netto + marzaKwota;
-  const vatKwota = nettoMarza * vat;
-  const brutto = nettoMarza + vatKwota;
+  // ── totals block ──────────────────────────────────
+  chk(48);
+  y += 5;
 
   const tRows = [
-    { label: 'Suma netto', value: fmtPLN(netto), bold: false },
-    { label: `Marża (${state.margin}%)`, value: fmtPLN(marzaKwota), bold: false },
-    { label: 'Netto z marżą', value: fmtPLN(nettoMarza), bold: false },
-    { label: `VAT (${state.vat}%)`, value: fmtPLN(vatKwota), bold: false },
+    {label:'Suma netto',             val:netto,    bold:false},
+    {label:'Marza ('+n(state.margin)+'%)', val:marza, bold:false},
+    {label:'Netto z marza',          val:nettoM,   bold:false},
+    {label:'VAT ('+n(state.vat)+'%)',val:vatKwota, bold:false},
   ];
   tRows.forEach(row => {
-    rect(MARGIN + 85, y, CW - 85, 7, '#F5F5F5');
-    text(row.label, MARGIN + 87, y + 5, { size: 9, bold: row.bold, color: '#555' });
-    text(row.value, W - MARGIN - 2, y + 5, { size: 9, bold: row.bold, color: '#222', align: 'right' });
-    hrule(y + 7);
+    chk(8);
+    fill(M+82, y, CW-82, 7, '#F5F5F5');
+    txt(s(row.label), M+85, y+5, {size:9, bold:row.bold, color:'#555555'});
+    txt(fmtPLN(row.val), PW-M-2, y+5, {size:9, bold:row.bold, color:'#222222', align:'right'});
+    hline(y+7, '#E0E0E0', 0.25);
     y += 7;
   });
 
-  // Grand total
-  checkY(14);
-  rect(MARGIN, y, CW, 14, '#1B5E20');
-  text('RAZEM BRUTTO', MARGIN + 4, y + 9, { size: 13, bold: true, color: '#FFFFFF' });
-  text(fmtPLN(brutto), W - MARGIN - 3, y + 9, { size: 14, bold: true, color: '#F9A825', align: 'right' });
-  y += 14;
+  chk(16);
+  fill(M, y, CW, 15, '#1B5E20');
+  txt('RAZEM BRUTTO', M+4, y+10, {size:14, bold:true, color:'#FFFFFF'});
+  txt(fmtPLN(brutto), PW-M-3, y+10, {size:14, bold:true, color:'#F9A825', align:'right'});
+  y += 15;
 
-  // ── WARUNKI ──
-  const termin = document.getElementById('o-termin').value;
-  const platnosc = document.getElementById('o-platnosc').value;
-  const gwarancja = document.getElementById('o-gwarancja').value;
-  const waznosc = document.getElementById('o-waznosc').value;
-  const uwagi = document.getElementById('o-uwagi').value;
+  // ── warunki ───────────────────────────────────────
+  const warunki = [
+    termin    && 'Termin realizacji: ' + termin,
+    platnosc  && 'Platnosc: ' + platnosc,
+    gwarancja && 'Gwarancja: ' + gwarancja,
+    waznosc   && 'Waznosc oferty: ' + waznosc,
+    uwagi     && uwagi,
+  ].filter(Boolean);
 
-  if (termin || platnosc || gwarancja || waznosc || uwagi) {
-    checkY(30);
-    y += 8;
-    rect(MARGIN, y, CW, 7, '#1B5E20');
-    text('WARUNKI OFERTY', MARGIN + 3, y + 5, { size: 9, bold: true, color: '#FFFFFF' });
+  if (warunki.length) {
+    chk(28);
+    y += 6;
+    fill(M, y, CW, 7, '#1B5E20');
+    txt('WARUNKI OFERTY', M+3, y+5, {size:9, bold:true, color:'#FFFFFF'});
     y += 9;
-    const warunki = [
-      termin && `Termin realizacji: ${termin}`,
-      platnosc && `Płatność: ${platnosc}`,
-      gwarancja && `Gwarancja: ${gwarancja}`,
-      waznosc && `Ważność oferty: ${waznosc}`,
-      uwagi && uwagi
-    ].filter(Boolean);
     warunki.forEach(w => {
-      checkY(8);
-      const lines = doc.splitTextToSize(w, CW - 6);
-      text(lines.join('\n'), MARGIN + 3, y + 4, { size: 8.5, color: '#333' });
-      y += lines.length * 4.5 + 3;
+      chk(10);
+      y = wrappedTxt(s(w), M+3, y+4, CW-6, 4.5, {size:8.5, color:'#333333'}) + 2;
     });
   }
 
-  // ── FOOTER ──
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let p = 1; p <= pageCount; p++) {
+  // ── footer on every page ──────────────────────────
+  const pages = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
     doc.setPage(p);
-    rect(0, 287, W, 10, '#1B5E20');
-    text(`Oferta ${nrOferty} — ${firma}`, MARGIN, 293, { size: 7, color: '#A5D6A7' });
-    text(`Strona ${p} / ${pageCount}`, W - MARGIN, 293, { size: 7, color: '#A5D6A7', align: 'right' });
+    fill(0, PH-9, PW, 9, '#1B5E20');
+    txt(firma + '  |  Oferta nr ' + nrOferty, M, PH-4, {size:7, color:'#A5D6A7'});
+    txt('Strona ' + p + ' / ' + pages, PW-M, PH-4, {size:7, color:'#A5D6A7', align:'right'});
   }
 
-  // save
+  // ── save / open ───────────────────────────────────
+  const fn = 'Oferta_PV_' + nrOferty.replace(/[\/\\]/g,'-') + '.pdf';
   try {
-    const safeNr = (nrOferty || 'oferta').replace(/[\/\\]/g,'-');
-    const safeKlient = (document.getElementById('o-klient').value || 'klient').split(' ')[0];
-    doc.save(`Oferta_PV_${safeKlient}_${safeNr}.pdf`);
+    const blob = doc.output('blob');
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = fn; a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 4000);
     showToast('✅ PDF wygenerowany!');
   } catch(e) {
-    showToast('❌ Błąd zapisu PDF: ' + e.message);
-    console.error('PDF save error:', e);
-    throw e;
+    // fallback: open in new tab
+    try { window.open(doc.output('bloburl'), '_blank'); showToast('✅ PDF otwarty!'); }
+    catch(e2) { alert('Nie mozna zapisac PDF: ' + e2.message); }
   }
-} // end _generatePDFImpl
+}
 
 // ═══════════════════════════════════════════════════
 // HELPERS
@@ -1771,7 +1839,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initFreeItems();
   // load any saved draft
   loadDraft();
-  // picker is populated on-demand from PRODUCTS
+  // populate native select dropdowns
+  setTimeout(populateSelects, 150);
   // register SW
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
