@@ -816,6 +816,31 @@ body { font-family: var(--font); background: var(--bg); color: var(--dark); min-
   background-color: #fff;
 }
 .pv-select option { font-size: 14px; }
+
+/* ── Styled native select ── */
+.pv-select {
+  width: 100%;
+  padding: 12px 40px 12px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-family: var(--font);
+  color: var(--dark);
+  background-color: #fafafa;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24'%3E%3Cpath fill='%23555' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 22px;
+  transition: border-color .15s;
+}
+.pv-select:focus {
+  outline: none;
+  border-color: var(--green-mid);
+  background-color: #fff;
+}
 </style>
 </head>
 <body>
